@@ -1,0 +1,142 @@
+From 9a8ecf6c75e79067f1f01308e3feeb9c3e5d619c Mon Sep 17 00:00:00 2001
+From: Scott K Logan <logans@cottsay.net>
+Date: Thu, 21 Mar 2024 16:01:35 -0500
+Subject: [PATCH] Add some pending patches to unblock RPM builds
+
+---
+ CMakeLists.txt           |  1 +
+ patches/no-fortify.patch | 39 +++++++++++++++++++++++++
+ patches/no-werror.patch  | 63 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 103 insertions(+)
+ create mode 100644 patches/no-fortify.patch
+ create mode 100644 patches/no-werror.patch
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 76dc0d22bbb4..4972a08ec25d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -7,6 +7,7 @@ find_package(ament_cmake_vendor_package REQUIRED)
+ ament_vendor(mimick_vendor
+   VCS_URL https://github.com/ros2/Mimick.git
+   VCS_VERSION 8d17528528167707ae38e1c6803a1e6a5845b01d
++  PATCHES patches
+ )
+ 
+ ament_export_dependencies(mimick)
+diff --git a/patches/no-fortify.patch b/patches/no-fortify.patch
+new file mode 100644
+index 000000000000..b0b757df9151
+--- /dev/null
++++ b/patches/no-fortify.patch
+@@ -0,0 +1,39 @@
++From ac8692197e8ffb24fe7746f9323170920d5dca8a Mon Sep 17 00:00:00 2001
++From: Scott K Logan <logans@cottsay.net>
++Date: Thu, 21 Mar 2024 15:46:09 -0500
++Subject: [PATCH] When disabling optimization, also disable _FORTIFY_SOURCE
++
++The _FORTIFY_SOURCE feature of gcc and clang cannot be enabled when
++optimization is disabled. When explicitly disabling it, also disable
++_FORTIFY_SOURCE if was externally enabled.
++---
++ CMakeLists.txt               | 2 +-
++ sample/strdup/CMakeLists.txt | 2 +-
++ 2 files changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/CMakeLists.txt b/CMakeLists.txt
++index f7a7b54..5092f69 100644
++--- a/CMakeLists.txt
+++++ b/CMakeLists.txt
++@@ -201,7 +201,7 @@ function (add_mimick_test _NAME)
++ 
++   if (NOT MSVC)
++     foreach (ARG ${ARGN})
++-      set_source_files_properties (${ARG} PROPERTIES COMPILE_FLAGS -O0)
+++      set_source_files_properties (${ARG} PROPERTIES COMPILE_FLAGS "-O0 -Wp,-U_FORTIFY_SOURCE")
++     endforeach ()
++   endif ()
++ 
++diff --git a/sample/strdup/CMakeLists.txt b/sample/strdup/CMakeLists.txt
++index f04bb9d..594700e 100644
++--- a/sample/strdup/CMakeLists.txt
+++++ b/sample/strdup/CMakeLists.txt
++@@ -3,7 +3,7 @@ add_executable (strdup_test test.c)
++ target_link_libraries (strdup_test strdup mimick)
++ 
++ if (NOT MSVC)
++-    set_source_files_properties (test.c PROPERTIES COMPILE_FLAGS -O0)
+++    set_source_files_properties (test.c PROPERTIES COMPILE_FLAGS "-O0 -Wp,-U_FORTIFY_SOURCE")
++ endif ()
++ 
++ add_mimick_sample (strdup_test)
+diff --git a/patches/no-werror.patch b/patches/no-werror.patch
+new file mode 100644
+index 000000000000..0f18bc3d4def
+--- /dev/null
++++ b/patches/no-werror.patch
+@@ -0,0 +1,63 @@
++From c2f6fc7068634a06b5b89e467c8a4a2a772b2832 Mon Sep 17 00:00:00 2001
++From: Scott K Logan <logans@cottsay.net>
++Date: Thu, 21 Mar 2024 15:13:47 -0500
++Subject: [PATCH] Stop forcing users to build with -Werror
++
++Forcing users to build with -Werror only punishes those building with
++newer compilers or toolchains than those in the repository CI. While
++maintaining a warning-free build is a noble cause, the repository CI can
++be adjusted so that it is enforced only for the platforms you're testing
++and not every single user.
++---
++ .travis.yml           | 1 +
++ appveyor.yml          | 1 +
++ sample/CMakeLists.txt | 2 +-
++ test/CMakeLists.txt   | 2 +-
++ 4 files changed, 4 insertions(+), 2 deletions(-)
++
++diff --git a/.travis.yml b/.travis.yml
++index b8a6f25..a4f29bf 100644
++--- a/.travis.yml
+++++ b/.travis.yml
++@@ -133,6 +133,7 @@ script:
++       -Wno-dev
++       -DCMAKE_BUILD_TYPE=${CONFIGURATION}
++       -DCMAKE_INSTALL_PREFIX=mimick-${TRAVIS_TAG}
+++      -DCMAKE_C_FLAGS="-Werror"
++       ${CMAKE_OPTS}
++       ..
++   - TERM=dumb cmake --build . -- -j4
++diff --git a/appveyor.yml b/appveyor.yml
++index 7b724ef..6b5101e 100644
++--- a/appveyor.yml
+++++ b/appveyor.yml
++@@ -61,6 +61,7 @@ install:
++       -DCMAKE_INSTALL_PREFIX="mimick-%RELEASE_NAME%"
++       -DCMAKE_BUILD_TYPE="%CONFIGURATION%"
++       -DCMAKE_SYSTEM_PROCESSOR="%PLATFORM%"
+++      -DCMAKE_C_FLAGS="-Werror"
++       %CMAKE_OPTS%
++       -G "%GENERATOR%"
++       ..
++diff --git a/sample/CMakeLists.txt b/sample/CMakeLists.txt
++index f637b75..85745f9 100644
++--- a/sample/CMakeLists.txt
+++++ b/sample/CMakeLists.txt
++@@ -1,5 +1,5 @@
++ if (NOT MSVC)
++-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Werror")
+++    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
++ endif ()
++ 
++ add_subdirectory (strdup)
++diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
++index e07b625..0a83c77 100644
++--- a/test/CMakeLists.txt
+++++ b/test/CMakeLists.txt
++@@ -1,5 +1,5 @@
++ if (NOT MSVC)
++-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Werror")
+++    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
++ endif ()
++ 
++ add_library (foo SHARED libfoo.c)
+-- 
+2.44.0
+
