@@ -1,0 +1,63 @@
+From c2f6fc7068634a06b5b89e467c8a4a2a772b2832 Mon Sep 17 00:00:00 2001
+From: Scott K Logan <logans@cottsay.net>
+Date: Thu, 21 Mar 2024 15:13:47 -0500
+Subject: [PATCH] Stop forcing users to build with -Werror
+
+Forcing users to build with -Werror only punishes those building with
+newer compilers or toolchains than those in the repository CI. While
+maintaining a warning-free build is a noble cause, the repository CI can
+be adjusted so that it is enforced only for the platforms you're testing
+and not every single user.
+---
+ .travis.yml           | 1 +
+ appveyor.yml          | 1 +
+ sample/CMakeLists.txt | 2 +-
+ test/CMakeLists.txt   | 2 +-
+ 4 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index b8a6f25..a4f29bf 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -133,6 +133,7 @@ script:
+       -Wno-dev
+       -DCMAKE_BUILD_TYPE=${CONFIGURATION}
+       -DCMAKE_INSTALL_PREFIX=mimick-${TRAVIS_TAG}
++      -DCMAKE_C_FLAGS="-Werror"
+       ${CMAKE_OPTS}
+       ..
+   - TERM=dumb cmake --build . -- -j4
+diff --git a/appveyor.yml b/appveyor.yml
+index 7b724ef..6b5101e 100644
+--- a/appveyor.yml
++++ b/appveyor.yml
+@@ -61,6 +61,7 @@ install:
+       -DCMAKE_INSTALL_PREFIX="mimick-%RELEASE_NAME%"
+       -DCMAKE_BUILD_TYPE="%CONFIGURATION%"
+       -DCMAKE_SYSTEM_PROCESSOR="%PLATFORM%"
++      -DCMAKE_C_FLAGS="-Werror"
+       %CMAKE_OPTS%
+       -G "%GENERATOR%"
+       ..
+diff --git a/sample/CMakeLists.txt b/sample/CMakeLists.txt
+index f637b75..85745f9 100644
+--- a/sample/CMakeLists.txt
++++ b/sample/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ if (NOT MSVC)
+-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Werror")
++    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
+ endif ()
+ 
+ add_subdirectory (strdup)
+diff --git a/test/CMakeLists.txt b/test/CMakeLists.txt
+index e07b625..0a83c77 100644
+--- a/test/CMakeLists.txt
++++ b/test/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ if (NOT MSVC)
+-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic -Werror")
++    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
+ endif ()
+ 
+ add_library (foo SHARED libfoo.c)
